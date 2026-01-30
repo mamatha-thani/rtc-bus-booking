@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtc-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rtc
+  template:
+    metadata:
+      labels:
+        app: rtc
+    spec:
+      containers:
+      - name: rtc-container
+        image: rtcacr.azurecr.io/rtc-bus-app
+        ports:
+        - containerPort: 8501

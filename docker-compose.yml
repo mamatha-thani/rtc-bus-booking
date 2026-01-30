@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: rtc-db
+    restart: always
+    environment:
+      POSTGRES_DB: rtc_booking
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "NewStrong@123"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: rtc-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8600:8501"
+    environment:
+      DB_HOST: db
+      DB_NAME: rtc_booking
+      DB_USER: postgres
+      DB_PASSWORD: "NewStrong@123"
+    restart: always
+
+volumes:
+  pgdata:
