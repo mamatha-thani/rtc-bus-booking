@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   db:
     image: postgres:15
@@ -15,7 +13,6 @@ services:
 
   app:
     build: .
-    image: rtc-bus-app
     container_name: rtc-bus
     ports:
       - "8501:8501"
@@ -26,6 +23,7 @@ services:
       DB_NAME: rtc_booking
       DB_USER: postgres
       DB_PASSWORD: NewStrong@123
+    restart: always
 
 volumes:
   pgdata:
