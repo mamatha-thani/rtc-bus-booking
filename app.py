@@ -6,36 +6,54 @@ import os
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="RTC Bus Ticket Booking", layout="centered")
 
-# ---------------- DATABASE FUNCTIONS ----------------
+# ---------------- DATABASE CONNECTION ----------------
 def get_db_connection():
+    DB_HOST = os.environ["DB_HOST"]   # MUST be rtc-db
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "db"),
-        database=os.getenv("DB_NAME", "rtc_booking"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "NewStrong@123"),
+        host=DB_HOST,
+        database=os.environ.get("DB_NAME", "rtc_booking"),
+        user=os.environ.get("DB_USER", "postgres"),
+        password=os.environ.get("DB_PASSWORD", "NewStrong@123"),
         port=5432
     )
 
-def get_available_seats():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT seat_no FROM seats WHERE status='AVAILABLE'")
-    seats = [row[0] for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return seats
+# ---------------- DATABASE INIT ----------------
+def initialize_database():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS seats (
+                    seat_no VARCHAR(10) PRIMARY KEY,
+                    status VARCHAR(20) DEFAULT 'AVAILABLE'
+                )
+            """)
+            cur.execute("SELECT COUNT(*) FROM seats")
+            if cur.fetchone()[0] == 0:
+                cur.execute("""
+                    INSERT INTO seats (seat_no) VALUES
+                    ('S1'),('S2'),('S3'),('S4'),('S5'),
+                    ('S6'),('S7'),('S8'),('S9'),('S10')
+                """)
 
-def book_seats(seat_list):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    for seat in seat_list:
-        cur.execute(
-            "UPDATE seats SET status='BOOKED' WHERE seat_no=%s",
-            (seat,)
-        )
-    conn.commit()
-    cur.close()
-    conn.close()
+initialize_database()
+
+# ---------------- DB OPERATIONS ----------------
+def get_available_seats():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT seat_no FROM seats WHERE status='AVAILABLE' ORDER BY seat_no"
+            )
+            return [row[0] for row in cur.fetchall()]
+
+def book_seats(seats):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            for seat in seats:
+                cur.execute(
+                    "UPDATE seats SET status='BOOKED' WHERE seat_no=%s",
+                    (seat,)
+                )
 
 # ---------------- SESSION STATE ----------------
 if "step" not in st.session_state:
@@ -48,7 +66,7 @@ if "passengers" not in st.session_state:
 # ---------------- TITLE ----------------
 st.title("🚌 RTC Bus Ticket Booking System")
 
-# ---------------- STEP 1: SEARCH BUS ----------------
+# ---------------- STEP 1 ----------------
 if st.session_state.step == 1:
     st.subheader("🔍 Search Bus")
 
@@ -63,7 +81,7 @@ if st.session_state.step == 1:
         st.session_state.step = 2
         st.rerun()
 
-# ---------------- STEP 2: BUS LIST ----------------
+# ---------------- STEP 2 ----------------
 elif st.session_state.step == 2:
     st.subheader("🚌 Available Buses")
 
@@ -76,91 +94,65 @@ elif st.session_state.step == 2:
     for bus in buses:
         with st.container(border=True):
             st.write(f"**Bus:** {bus['name']}")
-            st.write(f"**Departure Time:** {bus['time']}")
-            st.write(f"**Price per Seat:** ₹{bus['price']}")
+            st.write(f"**Time:** {bus['time']}")
+            st.write(f"**Price:** ₹{bus['price']}")
 
             if st.button(f"Select {bus['name']}"):
                 st.session_state.bus = bus
                 st.session_state.step = 3
                 st.rerun()
 
-# ---------------- STEP 3: SEAT SELECTION ----------------
+# ---------------- STEP 3 ----------------
 elif st.session_state.step == 3:
     st.subheader("💺 Select Seats")
 
-    available_seats = get_available_seats()
-
-    if not available_seats:
-        st.error("❌ All seats are already booked")
-        st.stop()
-
-    selected = st.multiselect("Choose seats", available_seats)
+    seats = get_available_seats()
+    selected = st.multiselect("Available Seats", seats)
 
     if st.button("Confirm Seats"):
-        if not selected:
-            st.error("Please select at least one seat")
-        else:
-            st.session_state.selected_seats = selected
-            st.session_state.step = 4
-            st.rerun()
+        st.session_state.selected_seats = selected
+        st.session_state.step = 4
+        st.rerun()
 
-# ---------------- STEP 4: PASSENGER DETAILS ----------------
+# ---------------- STEP 4 ----------------
 elif st.session_state.step == 4:
     st.subheader("👤 Passenger Details")
 
     st.session_state.passengers = []
 
     for i, seat in enumerate(st.session_state.selected_seats):
-        st.markdown(f"**Seat {seat}**")
-        name = st.text_input(f"Name ({seat})", key=f"name_{i}")
-        age = st.number_input(f"Age ({seat})", min_value=1, max_value=100, key=f"age_{i}")
-        gender = st.selectbox(f"Gender ({seat})", ["Male", "Female"], key=f"gender_{i}")
+        name = st.text_input(f"Name ({seat})", key=f"name{i}")
+        age = st.number_input(f"Age ({seat})", 1, 100, key=f"age{i}")
+        gender = st.selectbox(f"Gender ({seat})", ["Male", "Female"], key=f"gender{i}")
 
-        st.session_state.passengers.append({
-            "seat": seat,
-            "name": name,
-            "age": age,
-            "gender": gender
-        })
+        st.session_state.passengers.append(
+            {"seat": seat, "name": name, "age": age, "gender": gender}
+        )
 
     if st.button("Proceed to Payment"):
         st.session_state.step = 5
         st.rerun()
 
-# ---------------- STEP 5: PAYMENT ----------------
+# ---------------- STEP 5 ----------------
 elif st.session_state.step == 5:
     st.subheader("💳 Payment")
 
-    total_amount = len(st.session_state.selected_seats) * st.session_state.bus["price"]
-
-    st.write(f"**Total Seats:** {len(st.session_state.selected_seats)}")
-    st.write(f"**Total Amount:** ₹{total_amount}")
-
-    payment_method = st.radio("Select Payment Method", ["UPI", "Debit Card", "Credit Card"])
+    total = len(st.session_state.selected_seats) * st.session_state.bus["price"]
+    st.write(f"Total Amount: ₹{total}")
 
     if st.button("Pay Now"):
         book_seats(st.session_state.selected_seats)
-
-        st.success("Payment Successful!")
-        st.session_state.total_amount = total_amount
+        st.session_state.total_amount = total
         st.session_state.step = 6
         st.rerun()
 
-# ---------------- STEP 6: TICKET CONFIRMATION ----------------
+# ---------------- STEP 6 ----------------
 elif st.session_state.step == 6:
     st.subheader("🎫 Ticket Confirmation")
 
-    st.write("✅ **Booking Confirmed**")
-    st.write(f"**Bus:** {st.session_state.bus['name']}")
-    st.write(f"**From:** {st.session_state.from_city}")
-    st.write(f"**To:** {st.session_state.to_city}")
-    st.write(f"**Journey Date:** {st.session_state.journey_date}")
-    st.write(f"**Seats:** {', '.join(st.session_state.selected_seats)}")
-    st.write(f"**Total Paid:** ₹{st.session_state.total_amount}")
-
-    st.subheader("Passenger Details")
-    for p in st.session_state.passengers:
-        st.write(f"{p['seat']} - {p['name']} ({p['age']} yrs, {p['gender']})")
+    st.success("Booking Confirmed 🎉")
+    st.write(f"Seats: {', '.join(st.session_state.selected_seats)}")
+    st.write(f"Amount Paid: ₹{st.session_state.total_amount}")
 
     if st.button("Book Another Ticket"):
         st.session_state.step = 1

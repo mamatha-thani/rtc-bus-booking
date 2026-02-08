@@ -1,19 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rtc-app
+  name: rtc-bus-app
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
-      app: rtc
+      app: rtc-bus-app
   template:
     metadata:
       labels:
-        app: rtc
+        app: rtc-bus-app
     spec:
       containers:
-      - name: rtc-container
-        image: rtcacr.azurecr.io/rtc-bus-app
+      - name: rtc-bus-app
+        image: rtc01.azurecr.io/rtc-bus-app:latest
         ports:
         - containerPort: 8501
+        env:
+        - name: DB_HOST
+          value: rtc-db
+        - name: DB_NAME
+          value: rtc
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          value: postgres

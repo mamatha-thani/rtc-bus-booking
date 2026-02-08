@@ -1,13 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: rtc-service
+  name: rtc-bus-service
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
-    app: rtc
+    app: rtc-bus-app
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8501
-      nodePort: 30007
+  - protocol: TCP
+    port: 80
+    targetPort: 8501
