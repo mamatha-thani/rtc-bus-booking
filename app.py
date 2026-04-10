@@ -2,58 +2,76 @@ import streamlit as st
 from datetime import date
 import psycopg2
 import os
+import time
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="RTC Bus Ticket Booking", layout="centered")
 
 # ---------------- DATABASE CONNECTION ----------------
 def get_db_connection():
-    DB_HOST = os.environ["DB_HOST"]   # MUST be rtc-db
-    return psycopg2.connect(
-        host=DB_HOST,
-        database=os.environ.get("DB_NAME", "rtc_booking"),
-        user=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASSWORD", "NewStrong@123"),
-        port=5432
-    )
+    for i in range(5):  # retry logic (important)
+        try:
+            conn = psycopg2.connect(
+                host=os.environ.get("DB_HOST", "rtc-db"),
+                database=os.environ.get("DB_NAME", "rtc_booking"),
+                user=os.environ.get("DB_USER", "postgres"),
+                password=os.environ.get("DB_PASSWORD", "NewStrong@123"),
+                port=5432
+            )
+            return conn
+        except Exception as e:
+            time.sleep(2)
+    st.error("Database connection failed ❌")
+    st.stop()
 
 # ---------------- DATABASE INIT ----------------
 def initialize_database():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS seats (
-                    seat_no VARCHAR(10) PRIMARY KEY,
-                    status VARCHAR(20) DEFAULT 'AVAILABLE'
-                )
-            """)
-            cur.execute("SELECT COUNT(*) FROM seats")
-            if cur.fetchone()[0] == 0:
-                cur.execute("""
-                    INSERT INTO seats (seat_no) VALUES
-                    ('S1'),('S2'),('S3'),('S4'),('S5'),
-                    ('S6'),('S7'),('S8'),('S9'),('S10')
-                """)
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS seats (
+            seat_no VARCHAR(10) PRIMARY KEY,
+            status VARCHAR(20) DEFAULT 'AVAILABLE'
+        )
+    """)
+
+    cur.execute("SELECT COUNT(*) FROM seats")
+    if cur.fetchone()[0] == 0:
+        cur.execute("""
+            INSERT INTO seats (seat_no) VALUES
+            ('S1'),('S2'),('S3'),('S4'),('S5'),
+            ('S6'),('S7'),('S8'),('S9'),('S10')
+        """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 initialize_database()
 
 # ---------------- DB OPERATIONS ----------------
 def get_available_seats():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT seat_no FROM seats WHERE status='AVAILABLE' ORDER BY seat_no"
-            )
-            return [row[0] for row in cur.fetchall()]
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT seat_no FROM seats WHERE status='AVAILABLE' ORDER BY seat_no")
+    seats = [row[0] for row in cur.fetchall()]
+
+    cur.close()
+    conn.close()
+    return seats
 
 def book_seats(seats):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            for seat in seats:
-                cur.execute(
-                    "UPDATE seats SET status='BOOKED' WHERE seat_no=%s",
-                    (seat,)
-                )
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    for seat in seats:
+        cur.execute("UPDATE seats SET status='BOOKED' WHERE seat_no=%s", (seat,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # ---------------- SESSION STATE ----------------
 if "step" not in st.session_state:

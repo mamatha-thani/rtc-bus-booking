@@ -1,5 +1,7 @@
+version: '3.8'
+
 services:
-  db:
+  rtc-db:
     image: postgres:15
     container_name: rtc-db
     environment:
@@ -11,13 +13,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  app:
+  rtc-bus:
     build: .
     container_name: rtc-bus
     ports:
       - "8501:8501"
     depends_on:
-      - db
+      - rtc-db
     environment:
       DB_HOST: rtc-db
       DB_NAME: rtc_booking
