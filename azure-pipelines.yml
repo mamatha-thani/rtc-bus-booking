@@ -2,15 +2,7 @@ trigger:
 - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: Default
 
 steps:
-
-- task: Docker@2
-  inputs:
-    command: 'build'
-    Dockerfile: '**/Dockerfile'
-    tags: |
-      latest
-
-- script: echo "Docker build completed successfully"
+- script: echo "Pipeline is working on self-hosted agent"
