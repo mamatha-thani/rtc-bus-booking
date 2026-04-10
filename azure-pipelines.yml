@@ -2,7 +2,15 @@ trigger:
 - main
 
 pool:
-  name: Default
+  name: Default   # your self-hosted agent
 
 steps:
-- script: echo "Pipeline is working on self-hosted agent"
+
+- task: Docker@2
+  inputs:
+    command: 'build'
+    Dockerfile: '**/Dockerfile'
+    tags: |
+      latest
+
+- script: echo "Docker image build completed"
